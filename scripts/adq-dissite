@@ -1,0 +1,28 @@
+#!/bin/bash
+# Disable a site configuration (like nginx a2dissite)
+
+set -e
+
+SITES_ENABLED="/etc/adq-pingora/sites-enabled"
+
+if [ -z "$1" ]; then
+    echo "Usage: adq-dissite <site-name>"
+    echo "Enabled sites:"
+    ls -1 "$SITES_ENABLED" 2>/dev/null || echo "No sites enabled"
+    exit 1
+fi
+
+SITE_NAME="$1"
+ENABLED_FILE="$SITES_ENABLED/$SITE_NAME"
+
+if [ ! -L "$ENABLED_FILE" ]; then
+    echo "Site '$SITE_NAME' is not enabled"
+    exit 0
+fi
+
+# Remove symbolic link
+rm "$ENABLED_FILE"
+
+echo "Site '$SITE_NAME' disabled"
+echo "To activate the new configuration, run:"
+echo "  systemctl reload adq-pingora"

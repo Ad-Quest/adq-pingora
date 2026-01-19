@@ -1,0 +1,14 @@
+---
+version: 1
+threads: 4
+pid_file: /var/run/adquest_pingora.pid
+error_log: /tmp/adquest_pingora_err.log
+upgrade_sock: /tmp/adquest_pingora.sock
+
+# Настройки производительности
+work_stealing: true
+error_log_level: "info"
+
+# Лимиты
+client_body_timeout: 60
+client_header_timeout: 60

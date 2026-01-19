@@ -1,0 +1,74 @@
+# Pingora Proxy Main Configuration
+# Routes are configured in sites-available/ and enabled via sites-enabled/
+version: 1
+
+# Global settings
+global:
+  default_timeout: 30
+  max_retries: 3
+  health_check_interval: 5
+
+# Global security settings
+security:
+  headers:
+    x_frame_options: "SAMEORIGIN"
+    x_content_type_options: "nosniff"
+    x_xss_protection: "1; mode=block"
+    strict_transport_security: "max-age=31536000; includeSubDomains"
+    content_security_policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+    server: "Pingora/0.6.0"
+
+# Cache configuration
+cache:
+  enabled: true
+  default_ttl: 300  # 5 minutes
+  max_size: "1GB"
+  rules:
+    - path: "/static/*"
+      ttl: 3600  # 1 hour
+    - path: "/health"
+      ttl: 30    # 30 seconds
+    - path: "*.css"
+      ttl: 86400 # 1 day
+    - path: "*.js"
+      ttl: 86400 # 1 day
+    - path: "*.png"
+      ttl: 604800 # 1 week
+    - path: "*.jpg"
+      ttl: 604800 # 1 week
+
+# Logging configuration
+logging:
+  format: "json"  # json or text
+  level: "info"   # error, warn, info, debug, trace
+  access_log:
+    enabled: true
+    path: "/var/log/adq-pingora/access.log"
+    format: "json"
+  error_log:
+    enabled: true
+    path: "/var/log/adq-pingora/error.log"
+    format: "json"
+  metrics:
+    enabled: false
+    endpoint: "/metrics"
+    port: 9091
+
+# IP filtering
+ip_filter:
+  enabled: false
+  blacklist_file: "/etc/adq-pingora/blacklist.txt"
+  whitelist:
+    - "127.0.0.1"
+    - "::1"
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+  max_connections_per_ip: 100
+
+# Circuit breaker settings
+circuit_breaker:
+  enabled: true
+  failure_threshold: 5      # number of failures to open circuit
+  recovery_timeout: 30      # recovery time in seconds
+  success_threshold: 3      # successful requests to close circuit

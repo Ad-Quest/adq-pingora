@@ -1,0 +1,38 @@
+#!/bin/bash
+# Enable a site configuration (like nginx a2ensite)
+
+set -e
+
+SITES_AVAILABLE="/etc/adq-pingora/sites-available"
+SITES_ENABLED="/etc/adq-pingora/sites-enabled"
+
+if [ -z "$1" ]; then
+    echo "Usage: adq-ensite <site-name>"
+    echo "Available sites:"
+    ls -1 "$SITES_AVAILABLE" 2>/dev/null || echo "No sites available"
+    exit 1
+fi
+
+SITE_NAME="$1"
+AVAILABLE_FILE="$SITES_AVAILABLE/$SITE_NAME"
+ENABLED_FILE="$SITES_ENABLED/$SITE_NAME"
+
+if [ ! -f "$AVAILABLE_FILE" ]; then
+    echo "Error: Site '$SITE_NAME' not found in $SITES_AVAILABLE"
+    exit 1
+fi
+
+if [ -L "$ENABLED_FILE" ]; then
+    echo "Site '$SITE_NAME' is already enabled"
+    exit 0
+fi
+
+# Create sites-enabled directory if it doesn't exist
+mkdir -p "$SITES_ENABLED"
+
+# Create symbolic link
+ln -s "$AVAILABLE_FILE" "$ENABLED_FILE"
+
+echo "Site '$SITE_NAME' enabled"
+echo "To activate the new configuration, run:"
+echo "  systemctl reload adq-pingora"

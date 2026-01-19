@@ -1,0 +1,39 @@
+[Unit]
+Description=ADQ Pingora Proxy Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=nobody
+Group=nogroup
+WorkingDirectory=/etc/adq-pingora
+Environment=RUST_LOG=info
+ExecStart=/usr/local/bin/adq-pingora -c /etc/adq-pingora/conf.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=30
+
+# Logging - use journal, can configure rsyslog for file redirection
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=adq-pingora
+
+# Capabilities for binding to privileged ports
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/tmp /var/log/adq-pingora /etc/letsencrypt /etc/ssl /etc/adq-pingora
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target
