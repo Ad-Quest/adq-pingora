@@ -18,14 +18,32 @@ ADQ Pingora is a high-performance HTTP/HTTPS reverse proxy and load balancer bas
 
 ### Installation
 
+#### Option 1: NPM (Recommended)
+
+```bash
+# Install globally with NPM
+npm install -g adq-pingora
+
+# Or with Yarn
+yarn global add adq-pingora
+```
+
+#### Option 2: Manual Installation
+
 ```bash
 # Clone the repository
-git clone https://github.com/Ad-Quest/adquest-pingora-proxy.git
-cd adquest-pingora-proxy
+git clone https://github.com/Ad-Quest/adq-pingora.git
+cd adq-pingora
 
 # Build and install
 sudo ./scripts/install.sh
 ```
+
+### Prerequisites
+
+- **Rust**: Install from [rustup.rs](https://rustup.rs/)
+- **Node.js**: Required for NPM installation (14.0.0+)
+- **Linux/macOS**: Currently supported platforms
 
 ### Basic Configuration
 

@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+// Find the actual binary
+const binaryPath = '/usr/local/bin/adq-pingora';
+
+if (!fs.existsSync(binaryPath)) {
+    console.error('ADQ Pingora binary not found. Please run: npm install -g adq-pingora');
+    process.exit(1);
+}
+
+// Pass all arguments to the actual binary
+const child = spawn(binaryPath, process.argv.slice(2), {
+    stdio: 'inherit'
+});
+
+child.on('exit', (code) => {
+    process.exit(code);
+});

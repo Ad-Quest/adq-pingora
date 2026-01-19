@@ -1,0 +1,60 @@
+{
+  "name": "adq-pingora",
+  "version": "1.0.0",
+  "description": "High-performance reverse proxy based on Cloudflare Pingora with nginx-style configuration",
+  "main": "index.js",
+  "bin": {
+    "adq-pingora": "./bin/adq-pingora",
+    "adq-ensite": "./bin/adq-ensite",
+    "adq-dissite": "./bin/adq-dissite"
+  },
+  "scripts": {
+    "preinstall": "node scripts/preinstall.js",
+    "postinstall": "node scripts/postinstall.js",
+    "preuninstall": "node scripts/preuninstall.js",
+    "build": "cargo build --release",
+    "test": "cargo test"
+  },
+  "keywords": [
+    "reverse-proxy",
+    "load-balancer",
+    "pingora",
+    "nginx",
+    "proxy",
+    "ssl",
+    "rate-limiting",
+    "cloudflare"
+  ],
+  "author": "Ad-Quest",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ad-Quest/adq-pingora.git"
+  },
+  "homepage": "https://github.com/Ad-Quest/adq-pingora",
+  "bugs": {
+    "url": "https://github.com/Ad-Quest/adq-pingora/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "linux",
+    "darwin"
+  ],
+  "dependencies": {
+    "fs-extra": "^11.1.1",
+    "which": "^4.0.0"
+  },
+  "devDependencies": {},
+  "files": [
+    "bin/",
+    "config/",
+    "sites-available/",
+    "scripts/",
+    "adq-pingora.service",
+    "README.md",
+    "LICENSE",
+    "docs/"
+  ]
+}
