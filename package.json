@@ -52,7 +52,10 @@
     "config/",
     "sites-available/",
     "scripts/",
+    "src/",
+    "tests/",
     "adq-pingora.service",
+    "Cargo.toml",
     "README.md",
     "LICENSE",
     "docs/"

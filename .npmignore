@@ -1,11 +1,9 @@
 # Build artifacts
 target/
-Cargo.lock
 
 # Development files
 .git/
 .gitignore
-tests/
 *.log
 
 # IDE files
@@ -25,4 +23,7 @@ Thumbs.db
 # Node modules (if any)
 node_modules/
 
-# Keep only essential files for NPM package
+# Keep essential files for building
+# Cargo.toml - KEEP
+# src/ - KEEP
+# tests/ - KEEP

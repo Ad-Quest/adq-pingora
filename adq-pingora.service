@@ -9,7 +9,7 @@ User=nobody
 Group=nogroup
 WorkingDirectory=/etc/adq-pingora
 Environment=RUST_LOG=info
-ExecStart=/usr/local/bin/adq-pingora -c /etc/adq-pingora/conf.yaml
+ExecStart=/usr/local/bin/adq-pingora -c /etc/adq-pingora/proxy.yaml
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5
