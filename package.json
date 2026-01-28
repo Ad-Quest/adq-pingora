@@ -1,6 +1,6 @@
 {
   "name": "adq-pingora",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "High-performance reverse proxy based on Cloudflare Pingora with nginx-style configuration",
   "main": "index.js",
   "bin": {
