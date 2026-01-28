@@ -1,0 +1,17 @@
+# Default server configuration - simple working example
+# This configuration provides a basic working setup
+
+server {
+    listen 8080;  # Use non-privileged port
+    server_name localhost _;
+    
+    # Simple health check endpoint
+    location /health {
+        return 200 "OK\n";
+    }
+    
+    # Default location - returns a welcome page
+    location / {
+        return 200 "Welcome to ADQ Pingora! Server is running successfully.\n";
+    }
+}

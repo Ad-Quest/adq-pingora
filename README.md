@@ -42,7 +42,27 @@ sudo ./scripts/install.sh
 ### Prerequisites
 
 - **Rust**: Install from [rustup.rs](https://rustup.rs/)
-- **Node.js**: Required for NPM installation (14.0.0+)
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  source ~/.cargo/env
+  ```
+- **Node.js**: Required version 14.0.0+ (18.x recommended)
+  ```bash
+  # Ubuntu/Debian
+  curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+  sudo apt-get install -y nodejs
+  
+  # macOS
+  brew install node
+  ```
+- **cmake**: Required for building native dependencies
+  ```bash
+  # Ubuntu/Debian
+  sudo apt-get install cmake
+  
+  # macOS
+  brew install cmake
+  ```
 - **Linux/macOS**: Currently supported platforms
 
 ### Basic Configuration
@@ -75,6 +95,25 @@ Enable the site:
 ```bash
 sudo adq-ensite example.com
 sudo systemctl start adq-pingora
+```
+
+### Quick Test
+
+After installation, a default configuration is automatically enabled. Test it:
+
+```bash
+# Test configuration
+sudo adq-pingora -t
+
+# Start the service
+sudo systemctl start adq-pingora
+
+# Test the server (default listens on port 8080)
+curl http://localhost:8080/health
+curl http://localhost:8080/
+
+# Check status
+systemctl status adq-pingora
 ```
 
 ## Documentation

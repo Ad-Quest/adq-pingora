@@ -31,7 +31,8 @@ try {
         '/etc/adq-pingora/sites-available',
         '/etc/adq-pingora/sites-enabled',
         '/var/log/adq-pingora',
-        '/var/lib/adq-pingora'
+        '/var/lib/adq-pingora',
+        '/etc/letsencrypt'  // Add missing directory for systemd service
     ];
 
     dirs.forEach(dir => {
@@ -70,7 +71,8 @@ try {
     console.log('Installing configuration files...');
     const configFiles = [
         { src: 'config/proxy.yaml', dest: '/etc/adq-pingora/proxy.yaml' },
-        { src: 'sites-available/example.com', dest: '/etc/adq-pingora/sites-available/example.com' }
+        { src: 'sites-available/example.com', dest: '/etc/adq-pingora/sites-available/example.com' },
+        { src: 'sites-available/default', dest: '/etc/adq-pingora/sites-available/default' }
     ];
 
     configFiles.forEach(({ src, dest }) => {
@@ -80,6 +82,15 @@ try {
             console.log(`  Installed: ${dest}`);
         }
     });
+
+    // Enable default site automatically
+    console.log('Enabling default site...');
+    const defaultSiteEnabled = '/etc/adq-pingora/sites-enabled/default';
+    const defaultSiteAvailable = '/etc/adq-pingora/sites-available/default';
+    if (fs.existsSync(defaultSiteAvailable) && !fs.existsSync(defaultSiteEnabled)) {
+        fs.symlinkSync(defaultSiteAvailable, defaultSiteEnabled);
+        console.log('  Default site enabled');
+    }
 
     // Set proper permissions
     console.log('Setting permissions...');
@@ -126,11 +137,13 @@ try {
 
     console.log('\nADQ Pingora installation completed successfully!');
     console.log('\nNext steps:');
-    console.log('  1. Configure your sites in /etc/adq-pingora/sites-available/');
-    console.log('  2. Enable sites with: adq-ensite <site-name>');
-    console.log('  3. Test configuration: adq-pingora -t');
-    console.log('  4. Start service: systemctl start adq-pingora');
-    console.log('  5. Enable on boot: systemctl enable adq-pingora');
+    console.log('  1. Test installation: /usr/local/bin/check-install.sh (if available)');
+    console.log('  2. Start service: systemctl start adq-pingora');
+    console.log('  3. Test default site: curl http://localhost:8080/health');
+    console.log('  4. Configure custom sites in /etc/adq-pingora/sites-available/');
+    console.log('  5. Enable sites with: adq-ensite <site-name>');
+    console.log('  6. Test configuration: adq-pingora -t');
+    console.log('  7. Enable on boot: systemctl enable adq-pingora');
     console.log('\nDocumentation: https://github.com/Ad-Quest/adq-pingora/tree/main/docs');
 
 } catch (error) {
