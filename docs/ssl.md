@@ -84,7 +84,7 @@ Set up automatic renewal:
 sudo crontab -e
 
 # Add this line for automatic renewal
-0 12 * * * /usr/bin/certbot renew --quiet && systemctl reload adq-pingora
+0 12 * * * /usr/bin/certbot renew --quiet --deploy-hook 'runuser -u adq-pingora -- /usr/local/libexec/adq-pingora/adq-pingora -t && systemctl restart adq-pingora'
 ```
 
 ## Multi-Domain SSL (SNI)
@@ -260,7 +260,7 @@ Test your SSL configuration:
 
 ```bash
 # Test configuration
-adq-pingora -t
+adqp -t
 
 # Check certificate details
 openssl x509 -in /etc/ssl/certs/example.com.crt -text -noout
@@ -365,10 +365,7 @@ sudo certbot renew --force-renewal
 ```bash
 # Automated renewal script
 #!/bin/bash
-certbot renew --quiet
-if [ $? -eq 0 ]; then
-    systemctl reload adq-pingora
-fi
+certbot renew --quiet --deploy-hook 'runuser -u adq-pingora -- /usr/local/libexec/adq-pingora/adq-pingora -t && systemctl restart adq-pingora'
 ```
 
 ### 3. Monitor Certificate Health

@@ -12,7 +12,7 @@ from pathlib import Path
 
 class Upstream(BaseHTTPRequestHandler):
     def do_GET(self):
-        body = f"upstream received {self.path}\n".encode()
+        body = f"upstream {self.server.server_port} received {self.path}\n".encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -81,7 +81,7 @@ server {{
         with subprocess.Popen([str(binary), "-c", str(config)], cwd=directory,
                               stdout=log, stderr=subprocess.STDOUT) as proxy:
             try:
-                wait_for_response(proxy, proxy_port, "/api/health", "upstream received /api/health", "smoke.test")
+                wait_for_response(proxy, proxy_port, "/api/health", f"upstream {upstream_port} received /api/health", "smoke.test")
                 wait_for_response(
                     proxy, metrics_port, "/metrics",
                     'http_requests_total{method="GET",service="core_api",status="200"}',

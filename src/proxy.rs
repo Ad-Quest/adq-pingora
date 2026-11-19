@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 use log::info;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use pingora::prelude::*;
@@ -17,7 +18,7 @@ use crate::routing::{handle_https_redirect, route_request};
 use crate::rate_limit::check_rate_limit;
 use crate::metrics::*;
 use crate::filter::IPFilter;
-use crate::config::{Config, ServerBlock, LocationBlock};
+use crate::config::Config;
 use crate::cache::CacheManager;
 use crate::circuit_breaker::CircuitBreaker;
 use crate::logging::LoggingMiddleware;
@@ -25,8 +26,7 @@ use std::time::Duration;
 
 /// Основной прокси для AdQuest
 pub struct AdQuestProxy {
-    core_api_lb: Arc<LoadBalancer<RoundRobin>>,  // RoundRobin поддерживает веса через Backend.weight
-    zitadel_lb: Arc<LoadBalancer<RoundRobin>>,
+    upstreams: HashMap<String, Arc<LoadBalancer<RoundRobin>>>,
     config: Arc<Config>,
     cache_manager: Option<Arc<CacheManager>>,
     circuit_breaker: Option<Arc<CircuitBreaker>>,
@@ -36,8 +36,7 @@ pub struct AdQuestProxy {
 
 impl AdQuestProxy {
     pub fn new(
-        core_api_lb: Arc<LoadBalancer<RoundRobin>>,
-        zitadel_lb: Arc<LoadBalancer<RoundRobin>>,
+        upstreams: HashMap<String, Arc<LoadBalancer<RoundRobin>>>,
         config: Arc<Config>,
         cache_manager: Option<Arc<CacheManager>>,
         circuit_breaker: Option<Arc<CircuitBreaker>>,
@@ -45,8 +44,7 @@ impl AdQuestProxy {
         ip_filter: Option<Arc<IPFilter>>,
     ) -> Self {
         Self {
-            core_api_lb,
-            zitadel_lb,
+            upstreams,
             config,
             cache_manager,
             circuit_breaker,
@@ -172,7 +170,8 @@ impl ProxyHttp for AdQuestProxy {
             let uri = session.req_header().uri.path();
 
             // Находим соответствующий server и location
-            if let Some(server) = nginx_config.find_server(host) {
+            let port = session.server_addr().and_then(|addr| addr.as_inet()).map(|addr| addr.port());
+            if let Some(server) = nginx_config.find_server_on_port(host, port) {
                 if let Some(location) = nginx_config.find_location(server, uri) {
                     if let Some(rate_limit) = &location.rate_limit {
                         // Создаем временную конфигурацию rate limit
@@ -241,22 +240,41 @@ impl ProxyHttp for AdQuestProxy {
             return Ok(true);
         }
 
-        // Определяем маршрутизацию
         route_request(&host, &uri, ctx);
+        let port = session.server_addr().and_then(|addr| addr.as_inet()).map(|addr| addr.port());
+        let server = self.config.nginx_config.as_ref()
+            .and_then(|config| config.find_server_on_port(&host, port));
+        if let Some(server) = server {
+            let Some(location) = self.config.find_location(server, &uri) else {
+                session.respond_error(404).await?;
+                return Ok(true);
+            };
+            if let Some(name) = &location.proxy_pass {
+                ctx.configured_upstream = Some(name.clone());
+                if ctx.service_type == ServiceType::Static {
+                    ctx.service_type = ServiceType::CoreApi;
+                }
+                return Ok(false);
+            }
+            if let Some((status, body)) = &location.response {
+                let mut response = ResponseHeader::build(*status, None)?;
+                response.insert_header("Content-Type", "text/plain; charset=utf-8")?;
+                response.insert_header("Content-Length", body.len().to_string())?;
+                add_security_headers(&mut response)?;
+                session.write_response_header(Box::new(response), false).await?;
+                session.write_response_body(Some(Bytes::copy_from_slice(body.as_bytes())), true).await?;
+                return Ok(true);
+            }
+        }
 
-        // Обработка статических страниц
         if ctx.service_type == ServiceType::Static {
             let html_content = self.get_static_html(&uri, &host);
-            
             let mut response = ResponseHeader::build(200, None)?;
             response.insert_header("Content-Type", "text/html; charset=utf-8")?;
             response.insert_header("Content-Length", html_content.len().to_string())?;
-            
             add_security_headers(&mut response)?;
-
             session.write_response_header(Box::new(response), false).await?;
             session.write_response_body(Some(Bytes::from(html_content)), true).await?;
-
             return Ok(true);
         }
 
@@ -338,18 +356,20 @@ impl ProxyHttp for AdQuestProxy {
             tokio::time::sleep(sleep_ms).await;
         }
 
+        if let Some(name) = ctx.configured_upstream.as_deref() {
+            let backend = self.upstreams.get(name)
+                .and_then(|lb| lb.select(b"", 256))
+                .ok_or_else(|| Error::new(ErrorType::HTTPStatus(502)))?;
+            return Ok(Box::new(HttpPeer::new(backend, false, String::new())));
+        }
+
         let upstream = match ctx.service_type {
-            ServiceType::CoreApi => {
-                // Используем select() как в примерах Pingora
-                // Arc автоматически разыменовывается при вызове методов через Deref
-                let backend = self.core_api_lb.select(b"", 256).unwrap();
-                info!("Selected core API backend: {:?}", backend);
-                backend
-            }
-            ServiceType::ZitadelAuth => {
-                let backend = self.zitadel_lb.select(b"", 256).unwrap();
-                info!("Selected Zitadel backend: {:?}", backend);
-                backend
+            ServiceType::CoreApi | ServiceType::ZitadelAuth => {
+                let name = if ctx.service_type == ServiceType::CoreApi { "core_api" } else { "zitadel_auth" };
+                self.upstreams.get(name)
+                    .or_else(|| if self.upstreams.len() == 1 { self.upstreams.values().next() } else { None })
+                    .and_then(|lb| lb.select(b"", 256))
+                    .ok_or_else(|| Error::new(ErrorType::HTTPStatus(502)))?
             }
             ServiceType::ChallengeApi => {
                 let addr = format!("127.0.0.1:{}", ctx.upstream_port);
@@ -406,7 +426,8 @@ impl ProxyHttp for AdQuestProxy {
                     // Для Zitadel используем HTTP для подключения к контейнеру
                     "http"
                 } else {
-                    if session.req_header().uri.scheme().is_some_and(|s| s == "https") ||
+                    if session.digest().is_some_and(|digest| digest.ssl_digest.is_some()) ||
+                       session.req_header().uri.scheme().is_some_and(|s| s == "https") ||
                        session.req_header().headers.get("x-forwarded-proto").is_some_and(|v| v == "https") {
                         "https"
                     } else {

@@ -5,12 +5,13 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=nobody
-Group=nogroup
+User=adq-pingora
+LogsDirectory=adq-pingora
+StateDirectory=adq-pingora
 WorkingDirectory=/etc/adq-pingora
 Environment=RUST_LOG=info
-ExecStart=/usr/local/bin/adq-pingora -c /etc/adq-pingora/proxy.yaml
-ExecReload=/bin/kill -HUP $MAINPID
+ExecStartPre=/usr/local/libexec/adq-pingora/adq-pingora -t -c /etc/adq-pingora/proxy.yaml
+ExecStart=/usr/local/libexec/adq-pingora/adq-pingora -c /etc/adq-pingora/proxy.yaml
 Restart=always
 RestartSec=5
 KillMode=mixed
@@ -29,7 +30,6 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/tmp /var/log/adq-pingora /etc/letsencrypt /etc/ssl /etc/adq-pingora
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectControlGroups=true

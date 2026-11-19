@@ -13,6 +13,13 @@ if (platform !== 'linux' && platform !== 'darwin') {
     process.exit(1);
 }
 
+if (process.env.npm_config_global === 'true' && !process.env.DESTDIR) {
+    if (platform !== 'linux' || !fs.existsSync('/run/systemd/system') || process.getuid() !== 0) {
+        console.error('System installation requires root on Linux with a running systemd instance.');
+        process.exit(1);
+    }
+}
+
 // Check Node.js version
 const nodeVersion = process.version;
 const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0]);
@@ -47,11 +54,4 @@ try {
     process.exit(1);
 }
 
-// Check if running as root for global install
-if (process.getuid && process.getuid() === 0) {
-    console.log('Running with root privileges');
-} else if (process.env.npm_config_global === 'true') {
-    console.log('WARNING: Global install detected. You may need to run with sudo.');
-}
-
-console.log('System requirements check passed');
+console.log("System requirements check passed");

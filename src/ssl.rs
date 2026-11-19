@@ -1,11 +1,8 @@
 use pingora_core::listeners::tls::TlsSettings;
 use pingora_core::listeners::TlsAccept;
-use pingora_core::services::listening::Service;
-use pingora_proxy::HttpProxy;
 use pingora_core::protocols::tls::TlsRef;
 use pingora_core::tls::ssl::{NameType, SslFiletype};
 use log::info;
-use std::path::Path;
 use std::collections::HashMap;
 use async_trait::async_trait;
 
@@ -60,61 +57,52 @@ impl TlsAccept for MultiCertManager {
     }
 }
 
-/// Настраивает SSL/TLS для прокси сервиса с поддержкой нескольких доменов
-pub fn configure_ssl(proxy_service: &mut Service<HttpProxy<crate::proxy::AdQuestProxy>>) {
-    // Создаем менеджер сертификатов
-    let mut cert_manager = MultiCertManager::new();
-    
-    // Добавляем все доступные сертификаты
-    let cert_configs = [
-        ("auth.ad-quest.ru", "/etc/letsencrypt/live/auth.ad-quest.ru/fullchain.pem", "/etc/letsencrypt/live/auth.ad-quest.ru/privkey.pem"),
-        ("api.ad-quest.ru", "/etc/letsencrypt/live/api.ad-quest.ru/fullchain.pem", "/etc/letsencrypt/live/api.ad-quest.ru/privkey.pem"),
-    ];
-    
-    let mut default_cert_path = None;
-    let mut default_key_path = None;
-    
-    for (domain, cert_path, key_path) in cert_configs.iter() {
-        if Path::new(cert_path).exists() && Path::new(key_path).exists() {
-            cert_manager.add_certificate(domain, cert_path, key_path);
-            info!("Added certificate for domain: {}", domain);
-            
-            // Используем первый найденный сертификат как default
-            if default_cert_path.is_none() {
-                default_cert_path = Some(cert_path);
-                default_key_path = Some(key_path);
-            }
-        } else {
-            info!("Certificate not found for domain: {} at {} and {}", domain, cert_path, key_path);
+/// Validate and group the listeners by port before starting the server.
+pub fn listener_settings(
+    config: &crate::config::NginxConfig,
+) -> Result<std::collections::BTreeMap<u16, Option<TlsSettings>>, Box<dyn std::error::Error>> {
+    use std::collections::BTreeMap;
+
+    let mut ports = BTreeMap::<u16, Vec<_>>::new();
+    for server in &config.servers {
+        for listen in &server.listen_ports {
+            ports.entry(listen.port).or_default().push((server, listen));
         }
     }
-    
-    // Настраиваем TLS с callback для динамического выбора сертификатов
-    if let (Some(default_cert), Some(default_key)) = (default_cert_path, default_key_path) {
-        match TlsSettings::with_callbacks(Box::new(cert_manager)) {
-            Ok(mut tls_settings) => {
-                tls_settings.enable_h2();
-                
-                // Устанавливаем default сертификат (будет использован если SNI не совпадает)
-                if let Err(e) = tls_settings.set_certificate_chain_file(default_cert) {
-                    info!("Failed to set default certificate: {}", e);
-                    return;
-                }
-                if let Err(e) = tls_settings.set_private_key_file(default_key, SslFiletype::PEM) {
-                    info!("Failed to set default private key: {}", e);
-                    return;
-                }
-                
-                proxy_service.add_tls_with_settings("0.0.0.0:443", None, tls_settings);
-                info!("HTTPS enabled on port 443 with multi-domain certificate support");
-                info!("Default certificate: {}", default_cert);
-                info!("Supported domains: auth.ad-quest.ru, api.ad-quest.ru");
+
+    let mut settings = BTreeMap::new();
+    for (port, servers) in ports {
+        let ssl = servers[0].1.ssl;
+        if servers.iter().any(|(_, listen)| listen.ssl != ssl) {
+            return Err(format!("port {port} mixes HTTP and TLS listeners").into());
+        }
+        if !ssl {
+            settings.insert(port, None);
+            continue;
+        }
+
+        let mut certificates = MultiCertManager::new();
+        let mut default = None;
+        for (server, _) in &servers {
+            let (Some(cert), Some(key)) = (&server.ssl_certificate, &server.ssl_certificate_key) else {
+                return Err(format!("TLS listener {port} requires a certificate and private key").into());
+            };
+            TlsSettings::intermediate(cert, key)?.check_private_key()?;
+            if default.is_none() {
+                default = Some((cert, key));
             }
-            Err(e) => {
-                info!("Failed to create TLS settings with callbacks: {}", e);
+            for domain in &server.server_names {
+                certificates.add_certificate(domain, cert, key);
             }
         }
-    } else {
-        info!("No valid TLS certificates found, HTTPS disabled");
+        let (cert, key) = default.unwrap();
+        let mut tls = TlsSettings::with_callbacks(Box::new(certificates))?;
+        tls.set_certificate_chain_file(cert)?;
+        tls.set_private_key_file(key, SslFiletype::PEM)?;
+        if servers.iter().any(|(_, listen)| listen.http2) {
+            tls.enable_h2();
+        }
+        settings.insert(port, Some(tls));
     }
+    Ok(settings)
 }

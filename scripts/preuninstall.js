@@ -42,9 +42,9 @@ try {
     // Remove binaries
     console.log('Removing binaries...');
     const binaries = [
-        '/usr/local/bin/adq-pingora',
-        '/usr/local/bin/adq-ensite',
-        '/usr/local/bin/adq-dissite'
+        '/usr/local/libexec/adq-pingora/adq-pingora',
+        '/usr/local/libexec/adq-pingora/adq-ensite',
+        '/usr/local/libexec/adq-pingora/adq-dissite'
     ];
 
     binaries.forEach(binary => {

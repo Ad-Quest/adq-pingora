@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use regex::Regex;
-use log::{info, warn, error};
+use log::info;
 
 #[derive(Debug, Clone)]
 pub struct NginxConfig {
@@ -30,6 +30,7 @@ pub struct ListenDirective {
 pub struct LocationBlock {
     pub path: String,
     pub proxy_pass: Option<String>,
+    pub response: Option<(u16, String)>,
     pub rate_limit: Option<RateLimit>,
     pub cors_enable: bool,
 }
@@ -60,19 +61,33 @@ impl NginxConfig {
 
         let dir = fs::read_dir(sites_enabled_dir)?;
         
+        let mut dir = dir.collect::<Result<Vec<_>, _>>()?;
+        dir.sort_by_key(|entry| entry.file_name());
         for entry in dir {
-            let entry = entry?;
             let path = entry.path();
             
-            if path.is_file() {
-                match Self::parse_config_file(&path) {
-                    Ok(mut config) => {
-                        info!("Loaded config from: {}", path.display());
-                        servers.extend(config.servers);
-                        upstreams.extend(config.upstreams);
-                    }
-                    Err(e) => {
-                        error!("Failed to parse config {}: {}", path.display(), e);
+            if entry.file_type()?.is_dir() {
+                continue;
+            }
+            let config = Self::parse_config_file(&path)
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            info!("Loaded config from: {}", path.display());
+            servers.extend(config.servers);
+            for (name, upstream) in config.upstreams {
+                if upstreams.insert(name.clone(), upstream).is_some() {
+                    return Err(format!("duplicate upstream {name}").into());
+                }
+            }
+        }
+
+        if servers.is_empty() {
+            return Err("no server blocks enabled".into());
+        }
+        for server in &servers {
+            for location in &server.locations {
+                if let Some(name) = &location.proxy_pass {
+                    if !upstreams.contains_key(name) {
+                        return Err(format!("unknown upstream {name} for {}", location.path).into());
                     }
                 }
             }
@@ -92,169 +107,154 @@ impl NginxConfig {
         let mut servers = Vec::new();
         let mut upstreams = HashMap::new();
 
-        // Удаляем комментарии
-        let content = Self::remove_comments(content);
-        
-        // Парсим server блоки
-        let server_regex = Regex::new(r"server\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}")?;
-        for cap in server_regex.captures_iter(&content) {
-            if let Some(server_content) = cap.get(1) {
-                match Self::parse_server_block(server_content.as_str()) {
-                    Ok(server) => servers.push(server),
-                    Err(e) => warn!("Failed to parse server block: {}", e),
+        let comments = Regex::new(r#""(?:\\.|[^"\\])*"|#[^\n]*"#)?;
+        let content = comments.replace_all(content, |captures: &regex::Captures| {
+            let token = &captures[0];
+            if token.starts_with('#') { String::new() } else { token.to_string() }
+        });
+
+        let blocks = Regex::new(
+            r#"(server|upstream\s+([\w-]+))\s*\{((?:[^{}"]|"(?:\\.|[^"\\])*"|\{(?:[^{}"]|"(?:\\.|[^"\\])*")*\})*)\}"#,
+        )?;
+        let mut end = 0;
+        for capture in blocks.captures_iter(&content) {
+            let matched = capture.get(0).unwrap();
+            if !content[end..matched.start()].trim().is_empty() {
+                return Err("invalid server or upstream block".into());
+            }
+            end = matched.end();
+            if let Some(name) = capture.get(2) {
+                let name = name.as_str();
+                let upstream = Self::parse_upstream_block(name, &capture[3])?;
+                if upstreams.insert(name.to_string(), upstream).is_some() {
+                    return Err(format!("duplicate upstream {name}").into());
                 }
+            } else {
+                servers.push(Self::parse_server_block(&capture[3])?);
             }
         }
-
-        // Парсим upstream блоки
-        let upstream_regex = Regex::new(r"upstream\s+(\w+)\s*\{([^{}]*)\}")?;
-        for cap in upstream_regex.captures_iter(&content) {
-            if let (Some(name), Some(upstream_content)) = (cap.get(1), cap.get(2)) {
-                match Self::parse_upstream_block(name.as_str(), upstream_content.as_str()) {
-                    Ok(upstream) => {
-                        upstreams.insert(upstream.name.clone(), upstream);
-                    }
-                    Err(e) => warn!("Failed to parse upstream block {}: {}", name.as_str(), e),
-                }
-            }
+        if !content[end..].trim().is_empty() {
+            return Err("invalid or unterminated server or upstream block".into());
         }
 
         Ok(NginxConfig { servers, upstreams })
     }
 
-    /// Удаляет комментарии из конфига
-    fn remove_comments(content: &str) -> String {
-        let comment_regex = Regex::new(r"#.*$").unwrap();
-        content.lines()
-            .map(|line| comment_regex.replace(line, "").trim().to_string())
-            .filter(|line| !line.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n")
+    fn directives(content: &str) -> Result<Vec<(&str, &str)>, Box<dyn std::error::Error>> {
+        let directive = Regex::new(r#"^([a-z_]+)(?:\s+((?:[^;"{}]|"(?:\\.|[^"\\])*")+))?\s*;"#)?;
+        let mut remaining = content.trim();
+        let mut result = Vec::new();
+        while !remaining.is_empty() {
+            let captures = directive.captures(remaining)
+                .ok_or_else(|| format!("invalid directive near {:?}", remaining.lines().next().unwrap_or("")))?;
+            let name = captures.get(1).unwrap().as_str();
+            let value = captures.get(2).map_or("", |capture| capture.as_str().trim());
+            result.push((name, value));
+            remaining = remaining[captures.get(0).unwrap().end()..].trim();
+        }
+        Ok(result)
     }
 
-    /// Парсит server блок
     fn parse_server_block(content: &str) -> Result<ServerBlock, Box<dyn std::error::Error>> {
-        let mut listen_ports = Vec::new();
-        let mut server_names = Vec::new();
-        let mut ssl_certificate = None;
-        let mut ssl_certificate_key = None;
-        let mut locations = Vec::new();
+        let mut server = ServerBlock {
+            listen_ports: Vec::new(),
+            server_names: Vec::new(),
+            ssl_certificate: None,
+            ssl_certificate_key: None,
+            locations: Vec::new(),
+        };
 
-        // Парсим listen директивы
-        let listen_regex = Regex::new(r"listen\s+([^;]+);")?;
-        for cap in listen_regex.captures_iter(content) {
-            if let Some(listen_str) = cap.get(1) {
-                if let Ok(listen) = Self::parse_listen_directive(listen_str.as_str()) {
-                    listen_ports.push(listen);
-                }
+        let location = Regex::new(r#"\blocation\s+(/[^\s{]*)\s*\{((?:[^{}"]|"(?:\\.|[^"\\])*")*)\}"#)?;
+        for captures in location.captures_iter(content) {
+            server.locations.push(Self::parse_location_block(&captures[1], &captures[2])?);
+        }
+        let content = location.replace_all(content, "");
+        for (name, value) in Self::directives(&content)? {
+            match name {
+                "listen" => server.listen_ports.push(Self::parse_listen_directive(value)?),
+                "server_name" if !value.is_empty() => server.server_names.extend(value.split_whitespace().map(str::to_owned)),
+                "ssl_certificate" if !value.is_empty() => server.ssl_certificate = Some(value.to_owned()),
+                "ssl_certificate_key" if !value.is_empty() => server.ssl_certificate_key = Some(value.to_owned()),
+                _ => return Err(format!("unsupported or invalid server directive {name}").into()),
             }
         }
-
-        // Парсим server_name
-        let server_name_regex = Regex::new(r"server_name\s+([^;]+);")?;
-        if let Some(cap) = server_name_regex.captures(content) {
-            if let Some(names_str) = cap.get(1) {
-                server_names = names_str.as_str()
-                    .split_whitespace()
-                    .map(|s| s.to_string())
-                    .collect();
-            }
+        if server.listen_ports.is_empty() {
+            return Err("server has no listen directive".into());
         }
-
-        // Парсим SSL сертификаты
-        let ssl_cert_regex = Regex::new(r"ssl_certificate\s+([^;]+);")?;
-        if let Some(cap) = ssl_cert_regex.captures(content) {
-            ssl_certificate = cap.get(1).map(|m| m.as_str().to_string());
-        }
-
-        let ssl_key_regex = Regex::new(r"ssl_certificate_key\s+([^;]+);")?;
-        if let Some(cap) = ssl_key_regex.captures(content) {
-            ssl_certificate_key = cap.get(1).map(|m| m.as_str().to_string());
-        }
-
-        // Парсим location блоки
-        let location_regex = Regex::new(r"location\s+([^\s{]+)\s*\{([^{}]*)\}")?;
-        for cap in location_regex.captures_iter(content) {
-            if let (Some(path), Some(location_content)) = (cap.get(1), cap.get(2)) {
-                match Self::parse_location_block(path.as_str(), location_content.as_str()) {
-                    Ok(location) => locations.push(location),
-                    Err(e) => warn!("Failed to parse location block {}: {}", path.as_str(), e),
-                }
-            }
-        }
-
-        Ok(ServerBlock {
-            listen_ports,
-            server_names,
-            ssl_certificate,
-            ssl_certificate_key,
-            locations,
-        })
+        Ok(server)
     }
 
     /// Парсит listen директиву
     fn parse_listen_directive(listen_str: &str) -> Result<ListenDirective, Box<dyn std::error::Error>> {
         let parts: Vec<&str> = listen_str.split_whitespace().collect();
-        let port_str = parts[0];
+        let port_str = parts.first().ok_or("listen requires a port")?;
         
         let port = port_str.parse::<u16>()?;
+        if port == 0 || parts[1..].iter().any(|flag| !matches!(*flag, "ssl" | "http2")) {
+            return Err(format!("invalid listen directive: {listen_str}").into());
+        }
         let ssl = parts.contains(&"ssl");
         let http2 = parts.contains(&"http2");
 
         Ok(ListenDirective { port, ssl, http2 })
     }
 
-    /// Парсит location блок
     fn parse_location_block(path: &str, content: &str) -> Result<LocationBlock, Box<dyn std::error::Error>> {
-        let mut proxy_pass = None;
-        let mut rate_limit = None;
-        let mut cors_enable = false;
-
-        // Парсим proxy_pass
-        let proxy_pass_regex = Regex::new(r"proxy_pass\s+([^;]+);")?;
-        if let Some(cap) = proxy_pass_regex.captures(content) {
-            proxy_pass = cap.get(1).map(|m| m.as_str().to_string());
-        }
-
-        // Парсим rate_limit
-        let rate_limit_regex = Regex::new(r"rate_limit\s+(\d+)\s+(\d+);")?;
-        if let Some(cap) = rate_limit_regex.captures(content) {
-            if let (Some(rps), Some(burst)) = (cap.get(1), cap.get(2)) {
-                if let (Ok(rps_val), Ok(burst_val)) = (rps.as_str().parse::<u32>(), burst.as_str().parse::<u32>()) {
-                    rate_limit = Some(RateLimit {
-                        requests_per_second: rps_val,
-                        burst: burst_val,
+        let mut location = LocationBlock {
+            path: path.to_owned(),
+            proxy_pass: None,
+            response: None,
+            rate_limit: None,
+            cors_enable: false,
+        };
+        for (name, value) in Self::directives(content)? {
+            match name {
+                "proxy_pass" if value.split_whitespace().count() == 1 && location.proxy_pass.is_none() => {
+                    location.proxy_pass = Some(value.to_owned());
+                }
+                "return" if location.response.is_none() => {
+                    let (status, body) = value.split_once(char::is_whitespace).unwrap_or((value, ""));
+                    let status = status.parse::<u16>()?;
+                    if !(200..=599).contains(&status) {
+                        return Err(format!("invalid return status for {path}").into());
+                    }
+                    let body = if body.is_empty() { String::new() } else { serde_json::from_str(body.trim())? };
+                    location.response = Some((status, body));
+                }
+                "rate_limit" => {
+                    let limits: Vec<_> = value.split_whitespace().collect();
+                    let [requests_per_second, burst] = limits.as_slice() else {
+                        return Err("rate_limit requires a rate and burst".into());
+                    };
+                    location.rate_limit = Some(RateLimit {
+                        requests_per_second: requests_per_second.parse()?,
+                        burst: burst.parse()?,
                     });
                 }
+                "cors_enable" if value.is_empty() => location.cors_enable = true,
+                _ => return Err(format!("unsupported or invalid location directive {name}").into()),
             }
         }
-
-        // Проверяем cors_enable
-        cors_enable = content.contains("cors_enable");
-
-        Ok(LocationBlock {
-            path: path.to_string(),
-            proxy_pass,
-            rate_limit,
-            cors_enable,
-        })
+        if location.response.is_some() == location.proxy_pass.is_some() {
+            return Err(format!("location {path} requires exactly one of proxy_pass or return").into());
+        }
+        Ok(location)
     }
 
     /// Парсит upstream блок
     fn parse_upstream_block(name: &str, content: &str) -> Result<UpstreamBlock, Box<dyn std::error::Error>> {
         let mut servers = Vec::new();
 
-        let server_regex = Regex::new(r"server\s+([^;]+);")?;
-        for cap in server_regex.captures_iter(content) {
-            if let Some(server_str) = cap.get(1) {
-                let parts: Vec<&str> = server_str.as_str().split_whitespace().collect();
-                let address = parts[0].to_string();
-                let weight = 1; // По умолчанию вес 1, можно расширить парсинг
-
-                servers.push(UpstreamServer { address, weight });
-            }
+        for (directive, value) in Self::directives(content)? {
+            let mut parts = value.split_whitespace();
+            let address = parts.next().filter(|_| directive == "server")
+                .ok_or("upstream requires a server address")?;
+            servers.push(UpstreamServer { address: address.to_owned(), weight: 1 });
         }
 
+        if servers.is_empty() {
+            return Err(format!("upstream {name} has no servers").into());
+        }
         Ok(UpstreamBlock {
             name: name.to_string(),
             servers,
@@ -263,11 +263,18 @@ impl NginxConfig {
 
     /// Находит server блок по host
     pub fn find_server(&self, host: &str) -> Option<&ServerBlock> {
-        let host_without_port = host.split(':').next().unwrap_or(host);
-        
-        self.servers.iter().find(|server| {
-            server.server_names.iter().any(|name| name == host_without_port)
-        })
+        self.find_server_on_port(host, None)
+    }
+
+    pub fn find_server_on_port(&self, host: &str, port: Option<u16>) -> Option<&ServerBlock> {
+        let host = host.parse::<http::uri::Authority>().ok()?;
+        let servers = self.servers.iter().filter(|server| {
+            port.is_none() || server.listen_ports.iter().any(|listen| Some(listen.port) == port)
+        });
+        servers.clone()
+            .find(|server| server.server_names.iter().any(|name| name.eq_ignore_ascii_case(host.host())))
+            .or_else(|| servers.clone().find(|server| server.server_names.iter().any(|name| name == "_")))
+            .or_else(|| port.and_then(|_| servers.clone().next()))
     }
 
     /// Находит location в server блоке по пути
@@ -279,21 +286,9 @@ impl NginxConfig {
             }
         }
 
-        // Затем ищем по префиксу (самый длинный префикс)
-        let mut best_match: Option<&LocationBlock> = None;
-        let mut best_match_len = 0;
-
-        for location in &server.locations {
-            if location.path.ends_with('/') || location.path == "/" {
-                let prefix = location.path.trim_end_matches('/');
-                if path.starts_with(prefix) && prefix.len() > best_match_len {
-                    best_match = Some(location);
-                    best_match_len = prefix.len();
-                }
-            }
-        }
-
-        best_match
+        server.locations.iter()
+            .filter(|location| path.starts_with(&location.path))
+            .max_by_key(|location| location.path.len())
     }
 
     /// Получает upstream по имени

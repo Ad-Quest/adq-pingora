@@ -36,8 +36,8 @@ use metrics::init_metrics;
 
 fn main() {
     // Парсим аргументы командной строки
-    let matches = Command::new("adq-pingora")
-        .version("1.0.0")
+    let matches = Command::new("adqp")
+        .version(env!("CARGO_PKG_VERSION"))
         .about("ADQ Pingora - High-performance HTTP/HTTPS proxy server")
         .arg(Arg::new("test")
             .short('t')
@@ -68,14 +68,10 @@ fn main() {
 
     // Загружаем основную конфигурацию
     let config_path = matches.get_one::<String>("config").unwrap();
-    let config = Arc::new(
-        Config::load_from_file(config_path)
-            .unwrap_or_else(|e| {
-                eprintln!("Failed to load config from {}: {}", config_path, e);
-                eprintln!("Using default configuration");
-                Config::default()
-            })
-    );
+    let config = Arc::new(Config::load_from_file(config_path).unwrap_or_else(|error| {
+        eprintln!("Failed to load config from {config_path}: {error}");
+        std::process::exit(1);
+    }));
 
     // Инициализируем структурированное логирование
     if let Err(e) = init_logging(&config.logging) {
@@ -83,7 +79,7 @@ fn main() {
         env_logger::init();
     }
 
-    info!("Starting ADQ Pingora v1.0.0...");
+    info!("Starting ADQ Pingora v{}...", env!("CARGO_PKG_VERSION"));
 
     // Инициализируем Prometheus метрики
     init_metrics();
@@ -195,19 +191,8 @@ fn main() {
         background_services.push(bg_service);
     }
 
-    // Получаем handles для load balancers (берем первые два для совместимости)
-    let mut lb_iter = lb_handles.values();
-    let first_lb = lb_iter.next()
-        .expect("At least one upstream must be configured")
-        .clone();
-    let second_lb = lb_iter.next()
-        .unwrap_or(&first_lb)
-        .clone(); // Если только один upstream, используем его дважды
-
-    // Создаем основной прокси сервис
     let proxy = AdQuestProxy::new(
-        first_lb,
-        second_lb.clone(),
+        lb_handles,
         config.clone(),
         cache_manager,
         circuit_breaker,
@@ -217,48 +202,17 @@ fn main() {
 
     let mut proxy_service = http_proxy_service(&server.configuration, proxy);
     
-    // Добавляем TCP listeners на основе конфигурации
-    if let Some(nginx_config) = &config.nginx_config {
-        let mut added_ports = std::collections::HashSet::new();
-        
-        for server_config in &nginx_config.servers {
-            for listen in &server_config.listen_ports {
-                let addr = format!("0.0.0.0:{}", listen.port);
-                if !added_ports.contains(&listen.port) {
-                    proxy_service.add_tcp(&addr);
-                    info!("Added TCP listener on {}", addr);
-                    added_ports.insert(listen.port);
-                }
-            }
-        }
-        
-        if added_ports.is_empty() {
-            // Fallback к стандартным портам если ничего не настроено
-            proxy_service.add_tcp("0.0.0.0:9080");   // HTTP
-            proxy_service.add_tcp("0.0.0.0:9443");   // HTTPS
-            info!("Using default ports 9080 and 9443");
-        }
-    } else {
-        // Fallback к стандартным портам
-        proxy_service.add_tcp("0.0.0.0:9080");   // HTTP
-        proxy_service.add_tcp("0.0.0.0:9443");   // HTTPS
-        info!("No configuration found, using default ports 9080 and 9443");
-    }
-
-    // Настраиваем SSL/TLS если есть сертификаты
-    if let Some(nginx_config) = &config.nginx_config {
-        for server in &nginx_config.servers {
-            if let (Some(cert_path), Some(key_path)) = (&server.ssl_certificate, &server.ssl_certificate_key) {
-                if std::path::Path::new(cert_path).exists() && std::path::Path::new(key_path).exists() {
-                    info!("Configuring SSL for server '{}' with cert: {}", 
-                          server.server_names.join(", "), cert_path);
-                    // Здесь можно добавить конфигурацию SSL для конкретных доменов
-                    // В текущей версии Pingora это делается через configure_ssl функцию
-                } else {
-                    log::warn!("SSL certificates not found for server '{}': cert={}, key={}", 
-                              server.server_names.join(", "), cert_path, key_path);
-                }
-            }
+    let nginx_config = config.nginx_config.as_ref().expect("site configuration was loaded");
+    let listeners = ssl::listener_settings(nginx_config).unwrap_or_else(|error| {
+        eprintln!("Invalid listener configuration: {error}");
+        std::process::exit(1);
+    });
+    for (port, tls) in listeners {
+        let addr = format!("0.0.0.0:{port}");
+        if let Some(tls) = tls {
+            proxy_service.add_tls_with_settings(&addr, None, tls);
+        } else {
+            proxy_service.add_tcp(&addr);
         }
     }
 
@@ -330,47 +284,17 @@ fn test_configuration(config_path: &str) {
                          nginx_config.servers.len(), 
                          nginx_config.upstreams.len());
 
-                // Проверяем каждый сервер
-                for (i, server) in nginx_config.servers.iter().enumerate() {
-                    println!("adq-pingora: testing server {} ({})", 
-                             i + 1, 
-                             server.server_names.join(", "));
-
-                    // Проверяем SSL сертификаты
-                    if let (Some(cert), Some(key)) = (&server.ssl_certificate, &server.ssl_certificate_key) {
-                        if !std::path::Path::new(cert).exists() {
-                            println!("adq-pingora: [warn] SSL certificate not found: {}", cert);
-                            warnings += 1;
-                        }
-                        if !std::path::Path::new(key).exists() {
-                            println!("adq-pingora: [warn] SSL private key not found: {}", key);
-                            warnings += 1;
-                        }
-                    }
-
-                    // Проверяем locations
-                    for location in &server.locations {
-                        if let Some(upstream) = &location.proxy_pass {
-                            if !nginx_config.upstreams.contains_key(upstream) {
-                                println!("adq-pingora: [error] upstream '{}' not found for location '{}'", 
-                                         upstream, location.path);
-                                errors += 1;
-                            }
-                        }
-                    }
+                if let Err(error) = ssl::listener_settings(nginx_config) {
+                    println!("adq-pingora: [error] {error}");
+                    errors += 1;
                 }
-
-                // Проверяем upstreams
-                for (upstream_name, upstream) in &nginx_config.upstreams {
-                    if upstream.servers.is_empty() {
-                        println!("adq-pingora: [error] upstream '{}' has no servers", upstream_name);
+                for upstream in nginx_config.upstreams.values() {
+                    let addresses = upstream.servers.iter().map(|server| server.address.as_str());
+                    if let Err(error) = LoadBalancer::<pingora_load_balancing::selection::RoundRobin>::try_from_iter(addresses) {
+                        println!("adq-pingora: [error] upstream {}: {error}", upstream.name);
                         errors += 1;
-                    } else {
-                        println!("adq-pingora: upstream '{}' has {} server(s)", 
-                                 upstream_name, upstream.servers.len());
                     }
                 }
-
             } else {
                 println!("adq-pingora: [warn] no server configurations found in sites-enabled/");
                 warnings += 1;

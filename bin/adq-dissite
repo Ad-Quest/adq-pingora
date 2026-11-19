@@ -5,10 +5,10 @@ const path = require('path');
 const fs = require('fs');
 
 // Find the actual script
-const scriptPath = '/usr/local/bin/adq-dissite';
+const scriptPath = '/usr/local/libexec/adq-pingora/adq-dissite';
 
 if (!fs.existsSync(scriptPath)) {
-    console.error('ADQ Pingora scripts not found. Please run: npm install -g adq-pingora');
+    console.error('ADQ Pingora scripts not found. Please run: npm install -g adqproxy');
     process.exit(1);
 }
 
