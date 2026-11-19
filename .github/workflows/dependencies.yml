@@ -1,0 +1,21 @@
+name: Dependency audit
+
+on:
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust
+        run: rustup update stable && rustup default stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit the committed lockfile
+        run: cargo audit --file Cargo.lock

@@ -19,7 +19,7 @@ if (!isGlobalInstall) {
 try {
     // Build the Rust binary
     console.log('Building ADQ Pingora binary...');
-    execSync('cargo build --release', { 
+    execSync('cargo build --locked --release', {
         stdio: 'inherit',
         cwd: __dirname + '/..'
     });

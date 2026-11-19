@@ -60,8 +60,8 @@ Feature requests are welcome! Please:
 
 3. **Build the project**
    ```bash
-   cargo build
-   cargo test
+   cargo build --locked --bin adq-pingora
+   cargo test --locked --lib --bins
    ```
 
 4. **Run in development mode**
@@ -84,11 +84,13 @@ Feature requests are welcome! Please:
 
 3. **Test your changes**
    ```bash
-   # Run unit tests
-   cargo test
-   
-   # Run integration tests
-   cargo test --test integration_tests
+   # Run the same unit and smoke tests as CI
+   cargo build --locked --bin adq-pingora
+   cargo test --locked --lib --bins
+   python3 tests/smoke.py target/debug/adq-pingora
+
+   # Run diagnostics against a separately configured local proxy
+   cargo test --locked --test integration_tests
    
    # Test configuration validation
    cargo run -- -t

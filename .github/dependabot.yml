@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      pingora:
+        patterns:
+          - 'pingora'
+          - 'pingora-*'
+          - 'prometheus'
+          - 'tokio'
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly

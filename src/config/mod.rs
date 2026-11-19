@@ -122,13 +122,23 @@ pub struct CircuitBreakerConfig {
 impl Config {
     /// Загружает основную конфигурацию из YAML файла
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
+        let path = path.as_ref();
         let content = fs::read_to_string(path)?;
         let mut config: Config = serde_yaml::from_str(&content)?;
         
         // Загружаем nginx-style конфигурацию из sites-enabled
-        config.nginx_config = Some(NginxConfig::load_from_sites_enabled("/etc/adq-pingora/sites-enabled")?);
+        config.nginx_config = Some(NginxConfig::load_from_sites_enabled(Self::sites_enabled_dir(path))?);
         
         Ok(config)
+    }
+
+    pub(crate) fn sites_enabled_dir(config_path: &Path) -> std::path::PathBuf {
+        let sibling = config_path.with_file_name("sites-enabled");
+        if sibling.is_dir() {
+            sibling
+        } else {
+            "/etc/adq-pingora/sites-enabled".into()
+        }
     }
 
     /// Загружает только nginx-style конфигурацию
@@ -163,7 +173,7 @@ impl Config {
                     x_xss_protection: "1; mode=block".to_string(),
                     strict_transport_security: "max-age=31536000; includeSubDomains".to_string(),
                     content_security_policy: "default-src 'self'".to_string(),
-                    server: "Pingora/0.6.0".to_string(),
+                    server: "Pingora/0.9.1".to_string(),
                 },
             },
             cache: CacheConfig {
@@ -237,31 +247,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_find_route() {
-        let mut config = Config::default();
-        
-        // Добавляем тестовый маршрут
-        config.routes.push(RouteConfig {
-            name: "test".to_string(),
-            hosts: vec!["api.example.com".to_string(), "localhost:8080".to_string()],
-            paths: vec!["/api/*".to_string(), "/health".to_string()],
-            upstream: "test_upstream".to_string(),
-            ssl: SslConfig { enabled: false, cert_path: None, key_path: None },
-            cors: CorsConfig { enabled: false, origins: vec![] },
-            rate_limit: RateLimitConfig {
-                enabled: false,
-                requests_per_second: 100,
-                burst: None,
-                whitelist: None,
-                api_key_limits: None,
-            },
-        });
+    fn test_find_server_and_location() {
+        let config = Config {
+            nginx_config: Some(NginxConfig::parse_config_content(r#"
+                server {
+                    listen 8080;
+                    server_name api.example.com localhost;
+                    location /api/ { proxy_pass backend; }
+                    location /health { proxy_pass backend; }
+                }
+                upstream backend { server 127.0.0.1:8081; }
+            "#).unwrap()),
+            ..Config::default()
+        };
 
-        // Тестируем поиск маршрута
-        assert!(config.find_route("api.example.com", "/api/users").is_some());
-        assert!(config.find_route("api.example.com:443", "/api/users").is_some());
-        assert!(config.find_route("localhost:8080", "/health").is_some());
-        assert!(config.find_route("unknown.com", "/api/users").is_none());
-        assert!(config.find_route("api.example.com", "/unknown").is_none());
+        let api = config.find_server("api.example.com:443").unwrap();
+        let local = config.find_server("localhost:8080").unwrap();
+        assert_eq!(config.find_location(api, "/api/users").unwrap().path, "/api/");
+        assert_eq!(config.find_location(local, "/health").unwrap().path, "/health");
+        assert!(config.find_server("unknown.com").is_none());
+        assert!(config.find_location(api, "/unknown").is_none());
     }
 }

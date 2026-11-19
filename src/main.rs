@@ -271,7 +271,7 @@ fn main() {
 
     // Добавляем Prometheus metrics сервис если включен
     if config.logging.metrics.enabled {
-        let mut prometheus_service = pingora_core::services::listening::Service::prometheus_http_service();
+        let mut prometheus_service = pingora_prometheus::prometheus_http_service();
         prometheus_service.add_tcp(&format!("127.0.0.1:{}", config.logging.metrics.port));
         server.add_service(prometheus_service);
         info!("Prometheus metrics service started on port {}", config.logging.metrics.port);
@@ -377,8 +377,8 @@ fn test_configuration(config_path: &str) {
             }
 
             // Проверяем директории
-            let sites_enabled = "/etc/adq-pingora/sites-enabled";
-            if !std::path::Path::new(sites_enabled).exists() {
+            let sites_enabled = Config::sites_enabled_dir(std::path::Path::new(config_path));
+            if !sites_enabled.exists() {
                 println!("adq-pingora: [warn] sites-enabled directory not found");
                 warnings += 1;
             } else {

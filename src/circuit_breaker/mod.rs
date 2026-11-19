@@ -219,7 +219,7 @@ mod tests {
     use super::*;
     use tokio::time::{sleep, Duration};
 
-    #[test]
+    #[tokio::test]
     async fn test_circuit_breaker_transitions() {
         let config = CircuitBreakerConfig {
             enabled: true,
@@ -263,7 +263,7 @@ mod tests {
         assert_eq!(cb.get_state(upstream).await, CircuitState::Closed);
     }
 
-    #[test]
+    #[tokio::test]
     async fn test_circuit_breaker_disabled() {
         let config = CircuitBreakerConfig {
             enabled: false,

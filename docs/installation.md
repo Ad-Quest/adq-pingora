@@ -11,7 +11,7 @@
 
 ### Rust Toolchain
 
-ADQ Pingora requires Rust 1.70 or later:
+ADQ Pingora requires Rust 1.95 or later with the committed dependency versions:
 
 ```bash
 # Install Rust
@@ -27,11 +27,11 @@ rustup update
 ```bash
 # Ubuntu/Debian
 sudo apt update
-sudo apt install build-essential pkg-config libssl-dev
+sudo apt install build-essential cmake pkg-config libssl-dev
 
 # CentOS/RHEL
 sudo yum groupinstall "Development Tools"
-sudo yum install openssl-devel pkg-config
+sudo yum install cmake openssl-devel pkg-config
 ```
 
 ## Installation Methods
@@ -58,7 +58,7 @@ This will:
 
 ```bash
 # Build the project
-cargo build --release
+cargo build --locked --release
 
 # Install binary
 sudo cp target/release/adq-pingora /usr/local/bin/
@@ -165,7 +165,7 @@ rustup update
 
 # Clean build cache
 cargo clean
-cargo build --release
+cargo build --locked --release
 ```
 
 ## Uninstallation
