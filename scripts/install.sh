@@ -7,7 +7,7 @@ echo "Installing ADQ Pingora..."
 
 # Build the project
 echo "Building ADQ Pingora..."
-cargo build --release
+cargo build --locked --release
 
 # Create directories
 echo "Creating directories..."

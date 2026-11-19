@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-pingora = { version = "0.6.0", features = ["lb", "openssl"] }
-pingora-core = "0.6.0"
-pingora-proxy = "0.6.0"
-pingora-load-balancing = "0.6.0"
-pingora-limits = "0.6.0"
-pingora-cache = "0.6.0"
+pingora = { version = "0.9.1", features = ["lb", "openssl"] }
+pingora-core = "0.9.1"
+pingora-proxy = "0.9.1"
+pingora-load-balancing = "0.9.1"
+pingora-limits = "0.9.1"
+pingora-cache = "0.9.1"
 async-trait = "0.1.89"
 tokio = { version = "1.49", features = ["full"] }
 log = "0.4.29"
@@ -23,13 +23,14 @@ mime_guess = "2.0"
 chrono = { version = "0.4.43", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 once_cell = "1.21"
-prometheus = "0.13"
+prometheus = "0.14"
+pingora-prometheus = "0.9.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 regex = "1.10"
 uuid = { version = "1.0", features = ["v4"] }
 
 [dev-dependencies]
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.13", default-features = false, features = ["charset", "http2", "json", "native-tls", "system-proxy"] }
 tempfile = "3.8"
 tokio-test = "0.4"

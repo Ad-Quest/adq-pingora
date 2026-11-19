@@ -21,7 +21,7 @@ pub async fn handle_cors_preflight(session: &mut Session, uri: &str) -> Result<b
     
     response.insert_header("Access-Control-Max-Age", "86400")?;
     response.insert_header("Content-Length", "0")?;
-    response.insert_header("Server", "Pingora/0.6.0")?;
+    response.insert_header("Server", "Pingora/0.9.1")?;
     
     session.write_response_header(Box::new(response), false).await?;
     session.write_response_body(None, true).await?;
@@ -110,6 +110,6 @@ pub fn add_security_headers(response: &mut ResponseHeader) -> Result<()> {
          media-src 'none'; \
          manifest-src 'self'")?;
     
-    response.insert_header("Server", "Pingora/0.6.0")?;
+    response.insert_header("Server", "Pingora/0.9.1")?;
     Ok(())
 }

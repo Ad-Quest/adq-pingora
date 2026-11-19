@@ -20,9 +20,11 @@ impl CacheManager {
         // Компилируем регулярные выражения для правил кеширования
         for rule in &config.rules {
             let pattern = rule.path
-                .replace("*", ".*")  // Заменяем * на .*
-                .replace(".", "\\.");  // Экранируем точки
-            
+                .split('*')
+                .map(regex::escape)
+                .collect::<Vec<_>>()
+                .join(".*");
+
             match Regex::new(&format!("^{}$", pattern)) {
                 Ok(regex) => {
                     path_regexes.push((regex, rule.ttl));
@@ -79,7 +81,7 @@ impl CacheManager {
         let cache_key = key_parts.join("|");
         debug!("Created cache key: {}", cache_key);
         
-        Some(CacheKey::new("adquest", cache_key, ""))
+        Some(CacheKey::new(format!("adquest:{cache_key}"), ""))
     }
 
     /// Определяет, можно ли кешировать ответ
