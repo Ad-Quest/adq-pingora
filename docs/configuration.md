@@ -293,10 +293,10 @@ Always test your configuration before applying:
 
 ```bash
 # Test configuration syntax
-adq-pingora -t
+adqp -t
 
 # Test specific configuration file
-adq-pingora -t -c /path/to/config.yaml
+adqp -t -c /path/to/config.yaml
 ```
 
 ## Configuration Reload
@@ -305,7 +305,7 @@ Reload configuration without downtime:
 
 ```bash
 # Reload configuration
-sudo systemctl reload adq-pingora
+sudo -u adq-pingora adqp -t && sudo systemctl restart adq-pingora
 
 # Or send HUP signal
 sudo kill -HUP $(cat /var/run/adq-pingora.pid)

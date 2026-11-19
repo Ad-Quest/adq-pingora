@@ -15,6 +15,7 @@ pub enum ServiceType {
 pub struct RequestContext {
     pub service_type: ServiceType,
     pub upstream_host: String,
+    pub configured_upstream: Option<String>,
     pub upstream_port: u16,
     /// Количество попыток retry
     pub retries: u32,
@@ -27,6 +28,7 @@ impl RequestContext {
         Self {
             service_type: ServiceType::Static,
             upstream_host: String::new(),
+            configured_upstream: None,
             upstream_port: 0,
             retries: 0,
             start_time: std::time::Instant::now(),

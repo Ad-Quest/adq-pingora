@@ -441,7 +441,7 @@ If too many requests are being rate limited:
 
 1. **Verify configuration**:
    ```bash
-   adq-pingora -t
+   adqp -t
    ```
 
 2. **Check logs for errors**:

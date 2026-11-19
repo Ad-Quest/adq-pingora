@@ -44,7 +44,7 @@ git clone https://github.com/Ad-Quest/adquest-pingora-proxy.git
 cd adquest-pingora-proxy
 
 # Run installation script
-sudo ./scripts/install.sh
+./scripts/install.sh
 ```
 
 This will:
@@ -54,33 +54,42 @@ This will:
 - Install systemd service
 - Set up management scripts
 
-### Method 2: Manual Installation
+### Method 2: npm installation
+
+On Linux with systemd, install the build dependencies above and make Node.js,
+Cargo and CMake available on the root PATH.
 
 ```bash
-# Build the project
-cargo build --locked --release
-
-# Install binary
-sudo cp target/release/adq-pingora /usr/local/bin/
-sudo chmod +x /usr/local/bin/adq-pingora
-
-# Create directories
-sudo mkdir -p /etc/adq-pingora/{sites-available,sites-enabled}
-sudo mkdir -p /var/log/adq-pingora
-sudo chown nobody:nogroup /var/log/adq-pingora
-
-# Install configuration
-sudo cp config/proxy.yaml /etc/adq-pingora/
-sudo cp sites-available/example.com /etc/adq-pingora/sites-available/
-
-# Install management scripts
-sudo cp scripts/adq-{en,dis}site /usr/local/bin/
-sudo chmod +x /usr/local/bin/adq-{en,dis}site
-
-# Install systemd service
-sudo cp adq-pingora.service /etc/systemd/system/
-sudo systemctl daemon-reload
+sudo npm install -g adqproxy
+curl --fail http://127.0.0.1:8080/health
 ```
+
+The installer creates the service account, installs the service and enables
+the default site on a fresh installation. The system binary lives under
+`/usr/local/libexec/adq-pingora`. npm owns its command wrappers. Use `adqp` for configuration checks and other
+CLI commands. `adq-pingora` remains available as an alias.
+
+When migrating from the old npm package, remove it first so it releases its
+command links, then install the new package and restart the service:
+
+```bash
+sudo npm uninstall -g adq-pingora
+sudo npm install -g adqproxy
+sudo systemctl enable adq-pingora
+sudo -u adq-pingora adqp -t && sudo systemctl restart adq-pingora
+```
+
+Existing files under `/etc/adq-pingora` and enabled-site links are preserved.
+Before applying a site change or an upgrade, validate as the service user.
+The restart can interrupt traffic.
+
+```bash
+sudo -u adq-pingora adqp -t
+sudo systemctl restart adq-pingora
+```
+
+For TLS sites, grant the service user read access to the certificate and key
+and traversal access to their parent directories.
 
 ## Post-Installation
 
@@ -88,10 +97,10 @@ sudo systemctl daemon-reload
 
 ```bash
 # Check version
-adq-pingora --version
+adqp --version
 
 # Test configuration
-adq-pingora -t
+adqp -t
 ```
 
 ### 2. Configure Firewall
@@ -129,7 +138,7 @@ After installation, the following directories are created:
 ├── access.log              # Access logs
 └── error.log               # Error logs
 
-/usr/local/bin/             # Binaries
+/usr/local/libexec/adq-pingora/ # Installed executables
 ├── adq-pingora             # Main binary
 ├── adq-ensite              # Enable site script
 └── adq-dissite             # Disable site script
@@ -141,8 +150,8 @@ After installation, the following directories are created:
 
 ```bash
 # Fix log directory permissions
-sudo chown -R nobody:nogroup /var/log/adq-pingora
-sudo chmod 755 /var/log/adq-pingora
+sudo journalctl -u adq-pingora -n 50
+sudo -u adq-pingora adqp -t
 ```
 
 ### Port Binding Issues
@@ -170,18 +179,14 @@ cargo build --locked --release
 
 ## Uninstallation
 
+For an npm installation, stop and disable the service before removing the
+package. Remove the systemd unit and installed executables separately.
+Site configuration and logs are retained.
+
 ```bash
-# Stop and disable service
-sudo systemctl stop adq-pingora
-sudo systemctl disable adq-pingora
-
-# Remove files
-sudo rm /usr/local/bin/adq-pingora
-sudo rm /usr/local/bin/adq-{en,dis}site
-sudo rm /etc/systemd/system/adq-pingora.service
-sudo rm -rf /etc/adq-pingora
-sudo rm -rf /var/log/adq-pingora
-
-# Reload systemd
+sudo systemctl disable --now adq-pingora
+sudo npm uninstall -g adqproxy
+sudo rm -f /etc/systemd/system/adq-pingora.service
+sudo rm -f /usr/local/libexec/adq-pingora/{adq-pingora,adq-ensite,adq-dissite}
 sudo systemctl daemon-reload
 ```

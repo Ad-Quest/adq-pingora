@@ -168,7 +168,7 @@ sudo nano /etc/adq-pingora/sites-available/example.com
 sudo adq-ensite example.com
 
 # Test configuration
-sudo adq-pingora -t
+sudo adqp -t
 ```
 
 ### Step 4: Parallel Testing
@@ -219,7 +219,7 @@ sudo nano /etc/adq-pingora/sites-available/example.com
 # Change listen 8443 to listen 443
 
 # Reload ADQ Pingora
-sudo systemctl reload adq-pingora
+sudo -u adq-pingora adqp -t && sudo systemctl restart adq-pingora
 
 # Disable nginx from starting
 sudo systemctl disable nginx
@@ -499,7 +499,7 @@ sudo journalctl -u adq-pingora -f
 **Solution:**
 ```bash
 # Test configuration
-sudo adq-pingora -t
+sudo adqp -t
 
 # Check for common issues:
 # - Missing semicolons (not needed in ADQ Pingora)
@@ -560,6 +560,6 @@ If you encounter issues during migration:
 
 1. Check the [troubleshooting guide](troubleshooting.md)
 2. Review logs: `sudo journalctl -u adq-pingora -f`
-3. Test configuration: `sudo adq-pingora -t`
+3. Test configuration: `sudo adqp -t`
 4. Compare with working nginx config
 5. Open an issue on GitHub with your configuration

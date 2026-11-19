@@ -3,7 +3,7 @@
 
 set -e
 
-SITES_ENABLED="/etc/adq-pingora/sites-enabled"
+SITES_ENABLED="$(printenv DESTDIR || true)/etc/adq-pingora/sites-enabled"
 
 if [ -z "$1" ]; then
     echo "Usage: adq-dissite <site-name>"
@@ -13,6 +13,9 @@ if [ -z "$1" ]; then
 fi
 
 SITE_NAME="$1"
+case "$SITE_NAME" in
+    .|..|*/*) echo "Invalid site name: $SITE_NAME" >&2; exit 1 ;;
+esac
 ENABLED_FILE="$SITES_ENABLED/$SITE_NAME"
 
 if [ ! -L "$ENABLED_FILE" ]; then
@@ -25,4 +28,4 @@ rm "$ENABLED_FILE"
 
 echo "Site '$SITE_NAME' disabled"
 echo "To activate the new configuration, run:"
-echo "  systemctl reload adq-pingora"
+echo "  sudo -u adq-pingora adqp -t && sudo systemctl restart adq-pingora"

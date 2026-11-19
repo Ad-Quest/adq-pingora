@@ -47,10 +47,10 @@ npm publish --access public
 
 ```bash
 # Check package info
-npm info adq-pingora
+npm info adqproxy
 
 # Test installation
-npm install -g adq-pingora
+npm install -g adqproxy
 ```
 
 ## Package Structure
@@ -65,7 +65,7 @@ The NPM package includes:
 
 ## Installation Process
 
-When users run `npm install -g adq-pingora`:
+When users run `npm install -g adqproxy`:
 
 1. **Preinstall**: Checks system requirements (Rust, OS)
 2. **Install**: Downloads package files
@@ -84,7 +84,7 @@ After installation, users can:
 
 ```bash
 # Use like nginx
-adq-pingora -t                    # Test configuration
+adqp -t                    # Test configuration
 adq-ensite example.com           # Enable site
 adq-dissite example.com          # Disable site
 
@@ -107,10 +107,10 @@ systemctl enable adq-pingora    # Enable on boot
 
 ```bash
 # Unpublish specific version (within 24 hours)
-npm unpublish adq-pingora@1.0.0
+npm unpublish adqproxy@1.0.0
 
 # Deprecate version (preferred)
-npm deprecate adq-pingora@1.0.0 "Use version 1.0.1 instead"
+npm deprecate adqproxy@1.0.0 "Use version 1.0.1 instead"
 ```
 
 ## Best Practices

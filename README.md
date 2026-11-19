@@ -18,14 +18,17 @@ ADQ Pingora is a high-performance HTTP/HTTPS reverse proxy and load balancer bas
 
 ### Installation
 
-#### Option 1: NPM (Recommended)
+#### Option 1: NPM on Linux with systemd
+
+The system installation requires Node.js, Cargo and CMake on the root PATH.
+Upgrades preserve the active configuration and site links.
 
 ```bash
 # Install globally with NPM
-npm install -g adq-pingora
+sudo npm install -g adqproxy
 
-# Or with Yarn
-yarn global add adq-pingora
+# The installer enables the service on a fresh installation
+curl --fail http://127.0.0.1:8080/health
 ```
 
 #### Option 2: Manual Installation
@@ -36,7 +39,7 @@ git clone https://github.com/Ad-Quest/adq-pingora.git
 cd adq-pingora
 
 # Build and install
-sudo ./scripts/install.sh
+./scripts/install.sh
 ```
 
 ### Prerequisites
@@ -94,7 +97,7 @@ Enable the site:
 
 ```bash
 sudo adq-ensite example.com
-sudo systemctl start adq-pingora
+sudo -u adq-pingora adqp -t && sudo systemctl restart adq-pingora
 ```
 
 ### Quick Test
@@ -103,10 +106,7 @@ After installation, a default configuration is automatically enabled. Test it:
 
 ```bash
 # Test configuration
-sudo adq-pingora -t
-
-# Start the service
-sudo systemctl start adq-pingora
+sudo -u adq-pingora adqp -t
 
 # Test the server (default listens on port 8080)
 curl http://localhost:8080/health
@@ -130,7 +130,7 @@ systemctl status adq-pingora
 
 ```bash
 # Test configuration
-adq-pingora -t
+adqp -t
 
 # Enable/disable sites
 adq-ensite example.com
@@ -139,7 +139,7 @@ adq-dissite example.com
 # Service management
 systemctl start adq-pingora
 systemctl stop adq-pingora
-systemctl reload adq-pingora
+sudo -u adq-pingora adqp -t && sudo systemctl restart adq-pingora
 systemctl status adq-pingora
 ```
 

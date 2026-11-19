@@ -3,8 +3,8 @@
 
 set -e
 
-SITES_AVAILABLE="/etc/adq-pingora/sites-available"
-SITES_ENABLED="/etc/adq-pingora/sites-enabled"
+SITES_AVAILABLE="$(printenv DESTDIR || true)/etc/adq-pingora/sites-available"
+SITES_ENABLED="$(printenv DESTDIR || true)/etc/adq-pingora/sites-enabled"
 
 if [ -z "$1" ]; then
     echo "Usage: adq-ensite <site-name>"
@@ -14,6 +14,9 @@ if [ -z "$1" ]; then
 fi
 
 SITE_NAME="$1"
+case "$SITE_NAME" in
+    .|..|*/*) echo "Invalid site name: $SITE_NAME" >&2; exit 1 ;;
+esac
 AVAILABLE_FILE="$SITES_AVAILABLE/$SITE_NAME"
 ENABLED_FILE="$SITES_ENABLED/$SITE_NAME"
 
@@ -23,6 +26,10 @@ if [ ! -f "$AVAILABLE_FILE" ]; then
 fi
 
 if [ -L "$ENABLED_FILE" ]; then
+    if [ ! "$ENABLED_FILE" -ef "$AVAILABLE_FILE" ]; then
+        echo "Error: existing site link does not point to $AVAILABLE_FILE" >&2
+        exit 1
+    fi
     echo "Site '$SITE_NAME' is already enabled"
     exit 0
 fi
@@ -31,8 +38,8 @@ fi
 mkdir -p "$SITES_ENABLED"
 
 # Create symbolic link
-ln -s "$AVAILABLE_FILE" "$ENABLED_FILE"
+ln -s "../sites-available/$SITE_NAME" "$ENABLED_FILE"
 
 echo "Site '$SITE_NAME' enabled"
 echo "To activate the new configuration, run:"
-echo "  systemctl reload adq-pingora"
+echo "  sudo -u adq-pingora adqp -t && sudo systemctl restart adq-pingora"

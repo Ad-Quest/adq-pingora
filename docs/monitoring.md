@@ -331,10 +331,7 @@ sudo nano /etc/logrotate.d/adq-pingora
     delaycompress
     missingok
     notifempty
-    create 644 nobody nogroup
-    postrotate
-        systemctl reload adq-pingora
-    endscript
+    create 640 adq-pingora adq-pingora
 }
 ```
 

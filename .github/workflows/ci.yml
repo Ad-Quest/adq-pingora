@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install native build dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake pkg-config libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake pkg-config libssl-dev openssl
       - name: Set up Rust
         run: rustup update stable && rustup default stable
       - name: Build binary
@@ -25,3 +25,13 @@ jobs:
         run: cargo test --locked --test integration_tests --no-run
       - name: Run proxy smoke test
         run: python3 tests/smoke.py target/debug/adq-pingora
+      - name: Run installation smoke test
+        run: python3 -B tests/install_smoke.py target/debug/adq-pingora
+      - name: Start the installed systemd service
+        run: |
+          sudo scripts/install-system.sh "$PWD/target/debug/adq-pingora" standalone
+          sudo systemctl is-enabled adq-pingora
+          test "$(curl --fail --silent --show-error --retry 5 --retry-connrefused --max-time 5 http://127.0.0.1:8080/health)" = OK
+      - name: Show service logs on failure
+        if: failure()
+        run: sudo journalctl -u adq-pingora --no-pager -n 80
