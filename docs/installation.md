@@ -40,16 +40,19 @@ sudo yum install cmake openssl-devel pkg-config
 
 ```bash
 # Clone repository
-git clone https://github.com/Ad-Quest/adquest-pingora-proxy.git
-cd adquest-pingora-proxy
+git clone https://github.com/Ad-Quest/adq-pingora.git
+cd adq-pingora
 
 # Run installation script
 ./scripts/install.sh
 ```
 
+The automated installer requires root on Linux with systemd; set `DESTDIR` to
+stage files without touching the running system.
+
 This will:
-- Build the binary in release mode
-- Install to `/usr/local/bin/adq-pingora`
+- Build the binary in release mode with the committed lockfile
+- Install the binary to `/usr/local/libexec/adq-pingora/` and create command links in `/usr/local/bin` (`adqp`, `adq-pingora`, `adq-ensite`, `adq-dissite`)
 - Create configuration directories
 - Install systemd service
 - Set up management scripts

@@ -44,8 +44,8 @@ Common nginx features and ADQ Pingora equivalents:
 
 ```bash
 # Install ADQ Pingora alongside nginx (don't stop nginx yet)
-git clone https://github.com/Ad-Quest/adquest-pingora-proxy.git
-cd adquest-pingora-proxy
+git clone https://github.com/Ad-Quest/adq-pingora.git
+cd adq-pingora
 sudo ./scripts/install.sh
 ```
 

@@ -5,6 +5,57 @@ All notable changes to ADQ Pingora will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Planned Features
+- Docker container support
+- Kubernetes deployment manifests
+- Advanced load balancing algorithms (least connections, IP hash)
+- WebSocket proxy support enhancement
+- gRPC proxy support
+- Dynamic configuration updates via API
+- Web-based management interface
+- Advanced metrics and alerting
+- Plugin system for custom extensions
+
+### Removed
+- Obsolete `adq-pingora-1.0.0.tgz` build artifact from the repository
+
+## [1.0.3] - 2026-11-26
+
+### Added
+- npm package renamed to `adqproxy` and published as `adqproxy@1.0.3`; the old `adq-pingora` package remains at 1.0.2
+- `adqp` command alias for the main binary (`adq-pingora` remains available)
+- CI workflow with a locked build, unit tests/compile checks and a proxy smoke test
+- Weekly dependency audit workflow and Dependabot configuration for Cargo and npm
+- Installation smoke tests in `tests/install_smoke.py`
+
+### Changed
+- Upgraded the Pingora stack from 0.6.0 to 0.9.1, Prometheus to 0.14 and reqwest to 0.13, and added `pingora-prometheus`; `Cargo.lock` is committed and builds use `--locked`
+- System installations place binaries in `/usr/local/libexec/adq-pingora/`, with npm-owned command links in `/usr/local/bin`
+- Updated documentation for the npm package rename, system install paths and Rust 1.95+/cmake requirements
+- Refactored configuration parsing, proxy and TLS startup for the new Pingora APIs and install layout
+
+### Fixed
+- Install scripts preserve existing configuration and enabled sites, validate the new binary as the service user and keep npm command links separate from system binaries
+- systemd unit and certificate access for the `adq-pingora` service user
+
+## [1.0.2] - 2026-01-28
+
+### Changed
+- Maintenance version bump; no functional changes
+
+## [1.0.1] - 2026-01-28
+
+### Added
+- npm package `adq-pingora` with system-wide install scripts and `adq-pingora`, `adq-ensite`, `adq-dissite` commands
+- `scripts/check-install.sh` and the npm publishing guide (`NPM_PUBLISH.md`)
+- Default site configuration and expanded installation documentation
+
+### Fixed
+- npm packaging configuration and systemd service setup
+- Installation script handling and configuration defaults
+
 ## [1.0.0] - 2024-01-19
 
 ### Added
@@ -72,23 +123,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Log rotation configuration
 - Health check endpoints
 
-## [Unreleased]
-
-### Planned Features
-- Docker container support
-- Kubernetes deployment manifests
-- Advanced load balancing algorithms (least connections, IP hash)
-- WebSocket proxy support enhancement
-- gRPC proxy support
-- Dynamic configuration updates via API
-- Web-based management interface
-- Advanced metrics and alerting
-- Plugin system for custom extensions
-
 ---
 
 ## Version History
 
+- **1.0.3** - Pingora 0.9.1, CI and dependency audit, system install fixes, npm package renamed to `adqproxy`
+- **1.0.2** - Maintenance release (version bump only)
+- **1.0.1** - npm packaging and installation improvements
 - **1.0.0** - Initial release with full nginx-like functionality
 - **0.x.x** - Development versions (not released)
 
@@ -107,8 +148,8 @@ See the [Migration Guide](docs/migration.md) for detailed instructions.
 ## Support
 
 - **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/Ad-Quest/adquest-pingora-proxy/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Ad-Quest/adquest-pingora-proxy/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Ad-Quest/adq-pingora/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Ad-Quest/adq-pingora/discussions)
 
 ## Contributing
 
